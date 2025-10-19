@@ -1,0 +1,46 @@
+{
+  "name": "skilledge-desktop",
+  "version": "1.0.0",
+  "description": "SkillEdge Desktop - AI Interview Assistant with Undetectable Screen Sharing",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "build": "electron-builder",
+    "dist": "electron-builder --publish=never"
+  },
+  "keywords": [
+    "ai",
+    "interview",
+    "assistant",
+    "desktop",
+    "electron"
+  ],
+  "author": "SkillEdge Team",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^1.6.0",
+    "ws": "^8.14.0",
+    "electron-store": "^8.1.0"
+  },
+  "devDependencies": {
+    "electron": "^28.0.0",
+    "electron-builder": "^24.6.4"
+  },
+  "build": {
+    "appId": "com.skilledge.desktop",
+    "productName": "SkillEdge Desktop",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "**/*",
+      "!node_modules",
+      "!dist"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "assets/icon.ico"
+    }
+  }
+}

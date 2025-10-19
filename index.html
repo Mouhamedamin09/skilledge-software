@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SkillEdge Desktop - AI Interview Assistant</title>
+    <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png" />
+    <link rel="stylesheet" href="styles.css" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <!-- Custom Title Bar -->
+    <div class="title-bar">
+      <div class="title-bar-content">
+        <div class="title-bar-left">
+          <img src="favicon-32x32.png" class="title-icon" alt="SkillEdge" />
+          <span class="title-text">SkillEdge Desktop</span>
+          <!-- Settings Icon (only visible after login) -->
+          <div
+            class="settings-container"
+            id="settingsContainer"
+            style="display: none"
+          >
+            <button class="settings-btn" id="settingsBtn">
+              <i class="fas fa-cog"></i>
+            </button>
+            <div class="settings-dropdown" id="settingsDropdown">
+              <div class="settings-item">
+                <i class="fas fa-user"></i>
+                <span id="settingsEmail">user@example.com</span>
+              </div>
+              <div class="settings-item">
+                <i class="fas fa-crown"></i>
+                <span id="settingsPlan">Pro Plan</span>
+              </div>
+              <div class="settings-divider"></div>
+              <div class="settings-item settings-logout" id="settingsLogout">
+                <i class="fas fa-sign-out-alt"></i>
+                <span>Logout</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="title-bar-right">
+          <button class="title-bar-btn minimize-btn" id="minimizeBtn">
+            <i class="fas fa-minus"></i>
+          </button>
+          <button class="title-bar-btn close-btn" id="closeBtn">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-container">
+      <!-- Login Screen -->
+      <div id="loginScreen" class="screen active">
+        <div class="login-card">
+          <div class="login-header">
+            <img src="favicon-32x32.png" class="login-icon" alt="SkillEdge" />
+            <h2>SkillEdge Desktop</h2>
+            <p>AI Interview Assistant</p>
+          </div>
+
+          <form id="loginForm" class="login-form">
+            <div class="input-group">
+              <i class="fas fa-envelope input-icon"></i>
+              <input
+                type="email"
+                id="emailInput"
+                placeholder="Email"
+                required
+              />
+            </div>
+
+            <div class="input-group">
+              <i class="fas fa-lock input-icon"></i>
+              <input
+                type="password"
+                id="passwordInput"
+                placeholder="Password"
+                required
+              />
+            </div>
+
+            <button type="submit" class="login-btn" id="loginBtn">
+              <i class="fas fa-sign-in-alt"></i>
+              Login
+            </button>
+          </form>
+
+          <div class="auth-switch">
+            <p>
+              Don't have an account?
+              <a href="#" id="showRegisterLink">Register here</a>
+            </p>
+          </div>
+
+          <div id="loginError" class="error-message"></div>
+        </div>
+      </div>
+
+      <!-- Registration Screen -->
+      <div id="registerScreen" class="screen">
+        <div class="login-card">
+          <div class="login-header">
+            <img src="favicon-32x32.png" class="login-icon" alt="SkillEdge" />
+            <h2>Create Account</h2>
+            <p>Join SkillEdge Desktop</p>
+          </div>
+
+          <form id="registerForm" class="login-form">
+            <div class="input-group">
+              <i class="fas fa-user input-icon"></i>
+              <input
+                type="text"
+                id="firstNameInput"
+                placeholder="First Name"
+                required
+              />
+            </div>
+
+            <div class="input-group">
+              <i class="fas fa-user input-icon"></i>
+              <input
+                type="text"
+                id="lastNameInput"
+                placeholder="Last Name"
+                required
+              />
+            </div>
+
+            <div class="input-group">
+              <i class="fas fa-envelope input-icon"></i>
+              <input
+                type="email"
+                id="registerEmailInput"
+                placeholder="Email"
+                required
+              />
+            </div>
+
+            <div class="input-group">
+              <i class="fas fa-lock input-icon"></i>
+              <input
+                type="password"
+                id="registerPasswordInput"
+                placeholder="Password"
+                required
+              />
+            </div>
+
+            <button type="submit" class="login-btn" id="registerBtn">
+              <i class="fas fa-user-plus"></i>
+              Create Account
+            </button>
+          </form>
+
+          <div class="auth-switch">
+            <p>
+              Already have an account?
+              <a href="#" id="showLoginLink">Login here</a>
+            </p>
+          </div>
+
+          <div id="registerError" class="error-message"></div>
+        </div>
+      </div>
+
+      <!-- Email Verification Screen -->
+      <div id="verificationScreen" class="screen">
+        <div class="login-card">
+          <div class="login-header">
+            <img src="favicon-32x32.png" class="login-icon" alt="SkillEdge" />
+            <h2>Verify Email</h2>
+            <p>Check your email for verification code</p>
+          </div>
+
+          <form id="verificationForm" class="login-form">
+            <div class="input-group">
+              <i class="fas fa-envelope input-icon"></i>
+              <input
+                type="email"
+                id="verifyEmailInput"
+                placeholder="Email"
+                readonly
+              />
+            </div>
+
+            <div class="input-group">
+              <i class="fas fa-key input-icon"></i>
+              <input
+                type="text"
+                id="verificationCodeInput"
+                placeholder="Verification Code"
+                required
+              />
+            </div>
+
+            <button type="submit" class="login-btn" id="verifyBtn">
+              <i class="fas fa-check"></i>
+              Verify Email
+            </button>
+          </form>
+
+          <div class="auth-switch">
+            <p>
+              <a href="#" id="resendVerificationLink"
+                >Resend verification code</a
+              >
+            </p>
+          </div>
+
+          <div id="verificationError" class="error-message"></div>
+        </div>
+      </div>
+
+      <!-- Preferences Form Screen -->
+      <div id="preferencesScreen" class="screen">
+        <div class="preferences-card">
+          <div class="preferences-header">
+            <div class="header-left">
+              <div class="modal-icon">
+                <i class="fas fa-clipboard-list"></i>
+              </div>
+              <h3>Interview Preferences</h3>
+            </div>
+          </div>
+          <div class="preferences-body">
+            <div class="form-group">
+              <label>Your Name</label>
+              <input
+                type="text"
+                id="userNameInput"
+                placeholder="Enter your name"
+                required
+              />
+            </div>
+            <div class="form-group">
+              <label>Purpose of this meeting</label>
+              <input
+                type="text"
+                id="meetingPurposeInput"
+                placeholder="e.g., Mock interview for frontend position"
+                required
+              />
+            </div>
+            <div class="form-group">
+              <label>Interview Language</label>
+              <select id="selectedLanguageInput">
+                <option value="en">🇺🇸 English</option>
+                <option value="it">🇮🇹 Italian</option>
+                <option value="fr">🇫🇷 French</option>
+                <option value="es">🇪🇸 Spanish</option>
+                <option value="de">🇩🇪 German</option>
+                <option value="pt">🇵🇹 Portuguese</option>
+                <option value="ru">🇷🇺 Russian</option>
+                <option value="ja">🇯🇵 Japanese</option>
+                <option value="ko">🇰🇷 Korean</option>
+                <option value="zh">🇨🇳 Chinese</option>
+                <option value="ar">🇸🇦 Arabic</option>
+                <option value="hi">🇮🇳 Hindi</option>
+              </select>
+              <p class="form-help">
+                Select the language for the interview conversation.
+              </p>
+            </div>
+            <div class="form-group">
+              <label>General information (details)</label>
+              <textarea
+                id="generalInfoInput"
+                rows="8"
+                placeholder="Paste background: profile, JD, company notes, resume highlights, etc."
+                required
+              ></textarea>
+              <p class="form-help">These details help personalize responses.</p>
+            </div>
+            <div id="preferencesError" class="error-message"></div>
+            <div class="modal-actions">
+              <button id="savePreferencesBtn" class="start-btn">
+                <i class="fas fa-play"></i>
+                <span>Save & Continue</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Interview Type Selection Screen -->
+      <div id="interviewTypeScreen" class="screen">
+        <div class="interview-setup">
+          <div class="setup-header">
+            <h3>Choose Interview Type</h3>
+          </div>
+          <div class="interview-types">
+            <button class="interview-type-card" data-type="technical">
+              <div class="type-icon technical">
+                <i class="fas fa-bullseye"></i>
+              </div>
+              <div class="type-content">
+                <h4>Technical Interview</h4>
+                <p>Coding challenges, system design, algorithms</p>
+              </div>
+            </button>
+            <button class="interview-type-card" data-type="behavioral">
+              <div class="type-icon behavioral">
+                <i class="fas fa-bolt"></i>
+              </div>
+              <div class="type-content">
+                <h4>Behavioral Interview</h4>
+                <p>STAR method, leadership, teamwork questions</p>
+              </div>
+            </button>
+            <button class="interview-type-card" data-type="general">
+              <div class="type-icon general">
+                <i class="fas fa-check-circle"></i>
+              </div>
+              <div class="type-content">
+                <h4>General Interview</h4>
+                <p>Mixed questions, company culture, role fit</p>
+              </div>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Main Interface -->
+      <div id="mainScreen" class="screen">
+        <!-- AI Response Area -->
+        <div class="response-section">
+          <div class="response-header">
+            <h3><i class="fas fa-robot"></i> AI Response</h3>
+            <div class="response-controls">
+              <div class="recording-dot" id="recordingDot"></div>
+              <button class="clear-btn" id="clearBtn">
+                <i class="fas fa-trash"></i>
+              </button>
+            </div>
+          </div>
+
+          <div class="response-content" id="responseContent">
+            <div class="placeholder">
+              <i class="fas fa-comments"></i>
+              <p>Press SPACE to start recording, SPACE again to stop</p>
+              <p style="font-size: 12px; color: #94a3b8; margin-top: 8px">
+                <i class="fas fa-keyboard"></i> Your AI interview responses will
+                appear here
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="loading-overlay">
+      <div class="loading-spinner">
+        <i class="fas fa-spinner fa-spin"></i>
+        <p>Processing...</p>
+      </div>
+    </div>
+
+    <script src="renderer.js"></script>
+  </body>
+</html>

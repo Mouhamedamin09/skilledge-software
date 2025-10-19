@@ -1,0 +1,371 @@
+const {
+  app,
+  BrowserWindow,
+  ipcMain,
+  screen,
+  globalShortcut,
+  Tray,
+  Menu,
+} = require("electron");
+const path = require("path");
+const SkillEdgeAPI = require("./api/skilledge-api");
+
+let mainWindow;
+let tray;
+let isLoggedIn = false;
+let isRecording = false;
+let skillEdgeAPI;
+
+// Keep a global reference of the window object
+function createWindow() {
+  // Create the browser window with modern settings
+  mainWindow = new BrowserWindow({
+    width: 400,
+    height: 600,
+    minWidth: 400,
+    minHeight: 350,
+    webPreferences: {
+      nodeIntegration: true,
+      contextIsolation: false,
+      enableRemoteModule: true,
+    },
+    focusable: true,
+    frame: false, // Custom title bar
+    titleBarStyle: "hidden",
+    resizable: false, // Disable resizing for better transparency
+    maximizable: false,
+    minimizable: true,
+    alwaysOnTop: true, // Keep on top
+    show: false, // Don't show until ready
+    transparent: true, // Make window completely transparent
+    backgroundColor: "rgba(0, 0, 0, 0)", // Completely transparent background
+    skipTaskbar: false, // Show in taskbar for better focus
+    icon: path.join(__dirname, "assets/icon.png"),
+  });
+
+  // Load the HTML file
+  mainWindow.loadFile("index.html");
+
+  // Enable content protection to hide from screen sharing
+  mainWindow.setContentProtection(true);
+
+  // Show window when ready to prevent visual flash
+  mainWindow.once("ready-to-show", () => {
+    mainWindow.show();
+
+    // Focus the window and ensure it can receive keyboard events
+    if (mainWindow) {
+      mainWindow.focus();
+      mainWindow.setAlwaysOnTop(true);
+    }
+  });
+
+  // Handle window closed
+  mainWindow.on("closed", () => {
+    mainWindow = null;
+  });
+
+  // Ensure window can receive keyboard events when focused
+  mainWindow.on("focus", () => {
+    mainWindow.setAlwaysOnTop(true);
+  });
+
+  // Handle clicks to ensure focus
+  mainWindow.webContents.on("before-input-event", (event, input) => {
+    // Ensure the window stays focused for keyboard events
+    if (input.type === "keyDown") {
+      mainWindow.focus();
+    }
+  });
+
+  // Initialize API
+  skillEdgeAPI = new SkillEdgeAPI();
+
+  // Setup IPC handlers
+  setupIpcHandlers();
+
+  // Setup global shortcuts
+  setupGlobalShortcuts();
+
+  // Create system tray
+  createTray();
+}
+
+function setupIpcHandlers() {
+  // Handle minimize button
+  ipcMain.handle("minimize-window", () => {
+    if (mainWindow) {
+      mainWindow.minimize();
+    }
+  });
+
+  // Handle close button
+  ipcMain.handle("close-window", () => {
+    if (mainWindow) {
+      mainWindow.close();
+    }
+  });
+
+  // Handle login
+  ipcMain.handle("user-login", async (event, { email, password }) => {
+    try {
+      const result = await skillEdgeAPI.login(email, password);
+      if (result.success) {
+        isLoggedIn = skillEdgeAPI.hasValidSubscription();
+      }
+      return result;
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  });
+
+  // Handle logout
+  ipcMain.handle("user-logout", () => {
+    skillEdgeAPI.logout();
+    isLoggedIn = false;
+    return { success: true };
+  });
+
+  // Handle profile fetch
+  ipcMain.handle("get-profile", async () => {
+    try {
+      const result = await skillEdgeAPI.getProfile();
+      if (result.success) {
+        isLoggedIn = skillEdgeAPI.hasValidSubscription();
+      }
+      return result;
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  });
+
+  // Handle AI response generation
+  ipcMain.handle(
+    "generate-ai-response",
+    async (
+      event,
+      {
+        transcript,
+        userName,
+        meetingPurpose,
+        generalInfo,
+        selectedLanguage,
+        interviewType,
+        conversationHistory,
+      }
+    ) => {
+      try {
+        const result = await skillEdgeAPI.generateResponse(
+          transcript,
+          userName,
+          meetingPurpose,
+          generalInfo,
+          selectedLanguage,
+          interviewType,
+          conversationHistory
+        );
+        return result;
+      } catch (error) {
+        return { success: false, error: error.message };
+      }
+    }
+  );
+
+  // Handle usage update
+  ipcMain.handle("update-usage", async (event, { minutesUsed }) => {
+    try {
+      const result = await skillEdgeAPI.updateUsage(minutesUsed);
+      return result;
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  });
+
+  // Handle screen sharing hiding status check
+  ipcMain.handle("hide-from-screen-capture", () => {
+    // Content protection is already enabled via setContentProtection(true)
+    return true;
+  });
+
+  // Handle making window transparent after login
+  ipcMain.handle("make-window-transparent", () => {
+    if (mainWindow) {
+      mainWindow.setBackgroundColor("rgba(0, 0, 0, 0)");
+      return true;
+    }
+    return false;
+  });
+
+  // Handle API connection test
+  ipcMain.handle("test-api-connection", async () => {
+    try {
+      const result = await skillEdgeAPI.testConnection();
+      return result;
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  });
+
+  // Handle user registration
+  ipcMain.handle(
+    "user-register",
+    async (event, { firstName, lastName, email, password }) => {
+      try {
+        const result = await skillEdgeAPI.register(
+          firstName,
+          lastName,
+          email,
+          password
+        );
+        return result;
+      } catch (error) {
+        return { success: false, error: error.message };
+      }
+    }
+  );
+
+  // Handle email verification
+  ipcMain.handle("verify-email", async (event, { email, code }) => {
+    try {
+      const result = await skillEdgeAPI.verifyEmail(email, code);
+      if (result.success) {
+        isLoggedIn = skillEdgeAPI.hasValidSubscription();
+      }
+      return result;
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  });
+
+  // Handle recording state
+  ipcMain.handle("toggle-recording", () => {
+    isRecording = !isRecording;
+    return { isRecording };
+  });
+
+  // Handle get recording state
+  ipcMain.handle("get-recording-state", () => {
+    return { isRecording };
+  });
+
+  // Handle window resize for different screens
+  ipcMain.handle("resize-for-screen", (event, { screen }) => {
+    if (mainWindow) {
+      const currentBounds = mainWindow.getBounds();
+      let newWidth, newHeight;
+
+      switch (screen) {
+        case "login":
+        case "register":
+        case "verification":
+          // Narrower, more vertical for auth screens
+          newWidth = 400;
+          newHeight = 600;
+          break;
+        case "preferences":
+        case "interviewType":
+          // Medium width for form screens
+          newWidth = 600;
+          newHeight = 650;
+          break;
+        case "main":
+        default:
+          // Wider for main AI response screen
+          newWidth = 800;
+          newHeight = 450;
+          break;
+      }
+
+      mainWindow.setBounds({
+        x: currentBounds.x,
+        y: currentBounds.y,
+        width: newWidth,
+        height: newHeight,
+      });
+    }
+    return { success: true };
+  });
+}
+
+function setupGlobalShortcuts() {
+  // Disabled global shortcut - it was blocking spacebar in renderer
+  console.log("Global shortcuts disabled - using renderer-only approach");
+}
+
+function createTray() {
+  try {
+    // Create system tray icon
+    const iconPath = path.join(__dirname, "assets/tray-icon.png");
+    tray = new Tray(iconPath);
+
+    const contextMenu = Menu.buildFromTemplate([
+      {
+        label: "SkillEdge Desktop",
+        enabled: false,
+      },
+      { type: "separator" },
+      {
+        label: "Show/Hide",
+        click: () => {
+          if (mainWindow.isVisible()) {
+            mainWindow.hide();
+          } else {
+            mainWindow.show();
+          }
+        },
+      },
+      {
+        label: "Login Status",
+        submenu: [
+          {
+            label: isLoggedIn ? "Logged In" : "Not Logged In",
+            enabled: false,
+          },
+        ],
+      },
+      { type: "separator" },
+      {
+        label: "Quit",
+        click: () => {
+          app.quit();
+        },
+      },
+    ]);
+
+    tray.setContextMenu(contextMenu);
+    tray.setToolTip("SkillEdge Desktop - AI Interview Assistant");
+  } catch (error) {
+    console.warn("Failed to create system tray:", error.message);
+    // Continue without tray if icon is missing
+  }
+}
+
+// This method will be called when Electron has finished initialization
+app.whenReady().then(createWindow);
+
+// Quit when all windows are closed
+app.on("window-all-closed", () => {
+  if (process.platform !== "darwin") {
+    app.quit();
+  }
+});
+
+app.on("activate", () => {
+  if (BrowserWindow.getAllWindows().length === 0) {
+    createWindow();
+  }
+});
+
+// Security: Prevent new window creation
+app.on("web-contents-created", (event, contents) => {
+  contents.on("new-window", (event, navigationUrl) => {
+    event.preventDefault();
+  });
+});
+
+// Clean up on app quit
+app.on("before-quit", () => {
+  if (tray) {
+    tray.destroy();
+  }
+});
