@@ -332,29 +332,74 @@
         </div>
       </div>
 
-      <!-- Main Interface -->
-      <div id="mainScreen" class="screen">
-        <!-- AI Response Area -->
-        <div class="response-section">
-          <div class="response-header">
-            <h3><i class="fas fa-robot"></i> AI Response</h3>
-            <div class="response-controls">
-              <div class="recording-dot" id="recordingDot"></div>
-              <button class="clear-btn" id="clearBtn">
-                <i class="fas fa-trash"></i>
+      <!-- Upgrade Required Screen -->
+      <div id="upgradeRequiredScreen" class="screen">
+        <div class="upgrade-card">
+          <div class="upgrade-header">
+            <div class="upgrade-icon">
+              <i class="fas fa-crown"></i>
+            </div>
+            <h2>Upgrade Required</h2>
+            <p>To use this app, you need a Pro or Pro+ subscription</p>
+          </div>
+          <div class="upgrade-content">
+            <div class="upgrade-features">
+              <div class="feature-item">
+                <i class="fas fa-check"></i>
+                <span>AI Interview Assistant</span>
+              </div>
+              <div class="feature-item">
+                <i class="fas fa-check"></i>
+                <span>Real-time Transcription</span>
+              </div>
+              <div class="feature-item">
+                <i class="fas fa-check"></i>
+                <span>Personalized Responses</span>
+              </div>
+              <div class="feature-item">
+                <i class="fas fa-check"></i>
+                <span>Multiple Languages</span>
+              </div>
+            </div>
+            <div class="upgrade-actions">
+              <button class="upgrade-btn primary" id="goToPricingBtn">
+                <i class="fas fa-external-link-alt"></i>
+                <span>View Pricing Plans</span>
+              </button>
+              <button class="upgrade-btn secondary" id="loginAfterUpgradeBtn">
+                <i class="fas fa-sign-in-alt"></i>
+                <span>Login</span>
               </button>
             </div>
           </div>
+        </div>
+      </div>
 
-          <div class="response-content" id="responseContent">
-            <div class="placeholder">
-              <i class="fas fa-comments"></i>
-              <p>Press SPACE to start recording, SPACE again to stop</p>
-              <p style="font-size: 12px; color: #94a3b8; margin-top: 8px">
-                <i class="fas fa-keyboard"></i> Your AI interview responses will
-                appear here
-              </p>
-            </div>
+      <!-- Main Interface -->
+      <div id="mainScreen" class="screen">
+        <!-- Simple AI Response Bar -->
+        <div class="ai-response-bar">
+          <div class="ai-title">
+            <i class="fas fa-robot"></i>
+            <span>AI Response</span>
+          </div>
+          <div class="ai-controls">
+            <div class="recording-dot" id="recordingDot"></div>
+            <button class="clear-btn" id="clearBtn">
+              <i class="fas fa-trash"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- Full Space Messages Area -->
+        <div class="messages-area" id="responseContent">
+          <div class="placeholder">
+            <i class="fas fa-comments"></i>
+            <p>Press SPACE to start recording, SPACE again to stop</p>
+            <p style="font-size: 12px; color: #94a3b8; margin-top: 8px">
+              <i class="fas fa-keyboard"></i> Your AI interview responses will
+              appear here
+            </p>
           </div>
         </div>
       </div>

@@ -93,11 +93,31 @@ class SkillEdgeApp {
     console.log("Session cleared");
   }
 
+  openPricingPage() {
+    // Open SkillEdge pricing page in default browser
+    ipcRenderer.invoke("open-external-url", "https://skilledge.space/pricing");
+  }
+
+  // Resize window based on conversation length
+  async resizeWindowForConversation() {
+    try {
+      const conversationCount = this.conversationHistory.length;
+      await ipcRenderer.invoke("resize-for-conversation", {
+        conversationCount: Math.floor(conversationCount / 2), // Count conversation pairs
+      });
+    } catch (error) {
+      console.error("Error resizing window:", error);
+    }
+  }
+
   initializeElements() {
     // Screens
     this.loginScreen = document.getElementById("loginScreen");
     this.registerScreen = document.getElementById("registerScreen");
     this.verificationScreen = document.getElementById("verificationScreen");
+    this.upgradeRequiredScreen = document.getElementById(
+      "upgradeRequiredScreen"
+    );
     this.preferencesScreen = document.getElementById("preferencesScreen");
     this.interviewTypeScreen = document.getElementById("interviewTypeScreen");
     this.mainScreen = document.getElementById("mainScreen");
@@ -165,6 +185,10 @@ class SkillEdgeApp {
 
     // Interview type elements
     this.interviewTypeCards = document.querySelectorAll(".interview-type-card");
+
+    // Upgrade required elements
+    this.goToPricingBtn = document.getElementById("goToPricingBtn");
+    this.loginAfterUpgradeBtn = document.getElementById("loginAfterUpgradeBtn");
 
     // Loading overlay
     this.loadingOverlay = document.getElementById("loadingOverlay");
@@ -248,6 +272,15 @@ class SkillEdgeApp {
         const type = card.getAttribute("data-type");
         this.handleInterviewTypeSelection(type);
       });
+    });
+
+    // Upgrade required buttons
+    this.goToPricingBtn.addEventListener("click", () => {
+      this.openPricingPage();
+    });
+
+    this.loginAfterUpgradeBtn.addEventListener("click", () => {
+      this.showLoginScreen();
     });
 
     // Space key event listener for recording
@@ -492,10 +525,8 @@ class SkillEdgeApp {
           this.updateUserInfo();
           this.hideError();
         } else {
-          this.showError(
-            "This app is only available for Pro and Pro+ subscribers",
-            "verification"
-          );
+          // Show upgrade required screen instead of error
+          this.showUpgradeRequiredScreen();
         }
       } else {
         this.showError(result.error || "Verification failed", "verification");
@@ -552,6 +583,7 @@ class SkillEdgeApp {
     this.loginScreen.classList.add("active");
     this.registerScreen.classList.remove("active");
     this.verificationScreen.classList.remove("active");
+    this.upgradeRequiredScreen.classList.remove("active");
     this.preferencesScreen.classList.remove("active");
     this.interviewTypeScreen.classList.remove("active");
     this.mainScreen.classList.remove("active");
@@ -569,6 +601,7 @@ class SkillEdgeApp {
     this.loginScreen.classList.remove("active");
     this.registerScreen.classList.add("active");
     this.verificationScreen.classList.remove("active");
+    this.upgradeRequiredScreen.classList.remove("active");
     this.preferencesScreen.classList.remove("active");
     this.interviewTypeScreen.classList.remove("active");
     this.mainScreen.classList.remove("active");
@@ -588,6 +621,7 @@ class SkillEdgeApp {
     this.loginScreen.classList.remove("active");
     this.registerScreen.classList.remove("active");
     this.verificationScreen.classList.add("active");
+    this.upgradeRequiredScreen.classList.remove("active");
     this.preferencesScreen.classList.remove("active");
     this.interviewTypeScreen.classList.remove("active");
     this.mainScreen.classList.remove("active");
@@ -605,6 +639,7 @@ class SkillEdgeApp {
     this.loginScreen.classList.remove("active");
     this.registerScreen.classList.remove("active");
     this.verificationScreen.classList.remove("active");
+    this.upgradeRequiredScreen.classList.remove("active");
     this.preferencesScreen.classList.add("active");
     this.interviewTypeScreen.classList.remove("active");
     this.mainScreen.classList.remove("active");
@@ -615,10 +650,26 @@ class SkillEdgeApp {
     }, 50);
   }
 
+  showUpgradeRequiredScreen() {
+    this.loginScreen.classList.remove("active");
+    this.registerScreen.classList.remove("active");
+    this.verificationScreen.classList.remove("active");
+    this.upgradeRequiredScreen.classList.add("active");
+    this.preferencesScreen.classList.remove("active");
+    this.interviewTypeScreen.classList.remove("active");
+    this.mainScreen.classList.remove("active");
+
+    // Resize window for upgrade screen
+    setTimeout(() => {
+      ipcRenderer.invoke("resize-for-screen", { screen: "upgrade" });
+    }, 50);
+  }
+
   showInterviewTypeScreen() {
     this.loginScreen.classList.remove("active");
     this.registerScreen.classList.remove("active");
     this.verificationScreen.classList.remove("active");
+    this.upgradeRequiredScreen.classList.remove("active");
     this.preferencesScreen.classList.remove("active");
     this.interviewTypeScreen.classList.add("active");
     this.mainScreen.classList.remove("active");
@@ -633,6 +684,7 @@ class SkillEdgeApp {
     this.loginScreen.classList.remove("active");
     this.registerScreen.classList.remove("active");
     this.verificationScreen.classList.remove("active");
+    this.upgradeRequiredScreen.classList.remove("active");
     this.preferencesScreen.classList.remove("active");
     this.interviewTypeScreen.classList.remove("active");
     this.mainScreen.classList.add("active");
@@ -921,6 +973,9 @@ class SkillEdgeApp {
           content: result.response,
         });
 
+        // Resize window based on conversation length
+        this.resizeWindowForConversation();
+
         // Animate the AI response
         this.animateAIResponse(result.response);
       } else {
@@ -957,6 +1012,9 @@ class SkillEdgeApp {
           role: "assistant",
           content: result.response,
         });
+
+        // Resize window based on conversation length
+        this.resizeWindowForConversation();
 
         // Display the response
         this.displayResponse(transcript, result.response);

@@ -16,6 +16,58 @@ let isLoggedIn = false;
 let isRecording = false;
 let skillEdgeAPI;
 
+// Create system tray
+function createTray() {
+  // Create tray icon
+  tray = new Tray(path.join(__dirname, "assets/tray-icon.png"));
+
+  // Create context menu
+  const contextMenu = Menu.buildFromTemplate([
+    {
+      label: "Show SkillEdge",
+      click: () => {
+        if (mainWindow) {
+          mainWindow.show();
+          mainWindow.focus();
+        }
+      },
+    },
+    {
+      label: "Hide SkillEdge",
+      click: () => {
+        if (mainWindow) {
+          mainWindow.hide();
+        }
+      },
+    },
+    { type: "separator" },
+    {
+      label: "Quit",
+      click: () => {
+        app.quit();
+      },
+    },
+  ]);
+
+  // Set tooltip
+  tray.setToolTip("SkillEdge Desktop");
+
+  // Set context menu
+  tray.setContextMenu(contextMenu);
+
+  // Handle tray click (show/hide window)
+  tray.on("click", () => {
+    if (mainWindow) {
+      if (mainWindow.isVisible()) {
+        mainWindow.hide();
+      } else {
+        mainWindow.show();
+        mainWindow.focus();
+      }
+    }
+  });
+}
+
 // Keep a global reference of the window object
 function createWindow() {
   // Create the browser window with modern settings
@@ -24,6 +76,7 @@ function createWindow() {
     height: 600,
     minWidth: 400,
     minHeight: 350,
+    transparent: true, // Make window transparent
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: false,
@@ -37,9 +90,8 @@ function createWindow() {
     minimizable: true,
     alwaysOnTop: true, // Keep on top
     show: false, // Don't show until ready
-    transparent: true, // Make window completely transparent
     backgroundColor: "rgba(0, 0, 0, 0)", // Completely transparent background
-    skipTaskbar: false, // Show in taskbar for better focus
+    skipTaskbar: true, // Hide from taskbar for privacy
     icon: path.join(__dirname, "assets/icon.png"),
   });
 
@@ -49,6 +101,10 @@ function createWindow() {
   // Enable content protection to hide from screen sharing
   mainWindow.setContentProtection(true);
 
+  // Additional privacy measures
+  mainWindow.setSkipTaskbar(true); // Ensure hidden from taskbar
+  mainWindow.setAlwaysOnTop(true); // Keep on top but hidden from sharing
+
   // Show window when ready to prevent visual flash
   mainWindow.once("ready-to-show", () => {
     mainWindow.show();
@@ -57,6 +113,16 @@ function createWindow() {
     if (mainWindow) {
       mainWindow.focus();
       mainWindow.setAlwaysOnTop(true);
+      // Ensure content protection is always enabled
+      mainWindow.setContentProtection(true);
+    }
+  });
+
+  // Handle window close (hide instead of quit)
+  mainWindow.on("close", (event) => {
+    if (!app.isQuiting) {
+      event.preventDefault();
+      mainWindow.hide();
     }
   });
 
@@ -77,6 +143,9 @@ function createWindow() {
       mainWindow.focus();
     }
   });
+
+  // Create system tray
+  createTray();
 
   // Initialize API
   skillEdgeAPI = new SkillEdgeAPI();
@@ -181,10 +250,67 @@ function setupIpcHandlers() {
     }
   });
 
+  // Handle dynamic window resizing based on conversation length
+  ipcMain.handle("resize-for-conversation", (event, { conversationCount }) => {
+    if (mainWindow) {
+      const currentBounds = mainWindow.getBounds();
+      let newWidth = 700; // Base width - wider for better readability
+      let newHeight = 400; // Base height
+
+      // Increase size based on conversation length
+      if (conversationCount > 0) {
+        newHeight = Math.min(400 + conversationCount * 50, 700); // Max 700px height
+        newWidth = Math.min(700 + conversationCount * 20, 1000); // Max 1000px width
+      }
+
+      mainWindow.setBounds({
+        x: currentBounds.x,
+        y: currentBounds.y,
+        width: newWidth,
+        height: newHeight,
+      });
+
+      // Opacity handled by CSS for better text clarity
+
+      return { success: true, newWidth, newHeight };
+    }
+    return { success: false };
+  });
+
   // Handle screen sharing hiding status check
   ipcMain.handle("hide-from-screen-capture", () => {
     // Content protection is already enabled via setContentProtection(true)
     return true;
+  });
+
+  // Handle hiding from taskbar
+  ipcMain.handle("hide-from-taskbar", () => {
+    if (mainWindow) {
+      mainWindow.setSkipTaskbar(true);
+      return { success: true };
+    }
+    return { success: false };
+  });
+
+  // Handle showing in taskbar (if needed)
+  ipcMain.handle("show-in-taskbar", () => {
+    if (mainWindow) {
+      mainWindow.setSkipTaskbar(false);
+      return { success: true };
+    }
+    return { success: false };
+  });
+
+  // Handle opening external URLs
+  ipcMain.handle("open-external-url", async (event, url) => {
+    try {
+      const { shell } = require("electron");
+      await shell.openExternal(url);
+      return { success: true };
+    } catch (error) {
+      console.error("Error opening external URL:", error);
+      return { success: false, error: error.message };
+    }
   });
 
   // Handle making window transparent after login
@@ -261,18 +387,30 @@ function setupIpcHandlers() {
           // Narrower, more vertical for auth screens
           newWidth = 400;
           newHeight = 600;
+          // Set opacity to 100% for auth screens
+          mainWindow.setOpacity(1.0);
           break;
         case "preferences":
         case "interviewType":
           // Medium width for form screens
           newWidth = 600;
           newHeight = 650;
+          // Set opacity to 100% for form screens
+          mainWindow.setOpacity(1.0);
+          break;
+        case "upgrade":
+          // Medium width for upgrade screen
+          newWidth = 500;
+          newHeight = 600;
+          // Set opacity to 100% for upgrade screen
+          mainWindow.setOpacity(1.0);
           break;
         case "main":
         default:
-          // Wider for main AI response screen
-          newWidth = 800;
-          newHeight = 450;
+          // Start with wider main AI response screen, will grow with conversation
+          newWidth = 700;
+          newHeight = 400;
+          // Opacity handled by CSS for better text clarity
           break;
       }
 
@@ -343,17 +481,21 @@ function createTray() {
 // This method will be called when Electron has finished initialization
 app.whenReady().then(createWindow);
 
-// Quit when all windows are closed
+// Don't quit when all windows are closed (keep running in tray)
 app.on("window-all-closed", () => {
-  if (process.platform !== "darwin") {
-    app.quit();
-  }
+  // App stays running in system tray
+  // User can quit via tray menu
 });
 
 app.on("activate", () => {
   if (BrowserWindow.getAllWindows().length === 0) {
     createWindow();
   }
+});
+
+// Handle app quit
+app.on("before-quit", () => {
+  app.isQuiting = true;
 });
 
 // Security: Prevent new window creation
