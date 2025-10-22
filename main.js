@@ -16,56 +16,9 @@ let isLoggedIn = false;
 let isRecording = false;
 let skillEdgeAPI;
 
-// Create system tray
-function createTray() {
-  // Create tray icon
-  tray = new Tray(path.join(__dirname, "assets/tray-icon.png"));
-
-  // Create context menu
-  const contextMenu = Menu.buildFromTemplate([
-    {
-      label: "Show SkillEdge",
-      click: () => {
-        if (mainWindow) {
-          mainWindow.show();
-          mainWindow.focus();
-        }
-      },
-    },
-    {
-      label: "Hide SkillEdge",
-      click: () => {
-        if (mainWindow) {
-          mainWindow.hide();
-        }
-      },
-    },
-    { type: "separator" },
-    {
-      label: "Quit",
-      click: () => {
-        app.quit();
-      },
-    },
-  ]);
-
-  // Set tooltip
-  tray.setToolTip("SkillEdge Desktop");
-
-  // Set context menu
-  tray.setContextMenu(contextMenu);
-
-  // Handle tray click (show/hide window)
-  tray.on("click", () => {
-    if (mainWindow) {
-      if (mainWindow.isVisible()) {
-        mainWindow.hide();
-      } else {
-        mainWindow.show();
-        mainWindow.focus();
-      }
-    }
-  });
+// Use temp directory for cache to avoid permission issues
+if (process.env.NODE_ENV !== "development") {
+  app.setPath("userData", path.join(require("os").tmpdir(), "skilledge-app"));
 }
 
 // Keep a global reference of the window object
@@ -89,14 +42,19 @@ function createWindow() {
     maximizable: false,
     minimizable: true,
     alwaysOnTop: true, // Keep on top
-    show: false, // Don't show until ready
+    show: true, // Show immediately
     backgroundColor: "rgba(0, 0, 0, 0)", // Completely transparent background
     skipTaskbar: true, // Hide from taskbar for privacy
     icon: path.join(__dirname, "assets/icon.png"),
   });
 
-  // Load the HTML file
+  // Load HTML immediately - window is already visible with loading screen
   mainWindow.loadFile("index.html");
+
+  // Prevent navigation
+  mainWindow.webContents.on("will-navigate", (event) => {
+    event.preventDefault();
+  });
 
   // Enable content protection to hide from screen sharing
   mainWindow.setContentProtection(true);
@@ -105,18 +63,12 @@ function createWindow() {
   mainWindow.setSkipTaskbar(true); // Ensure hidden from taskbar
   mainWindow.setAlwaysOnTop(true); // Keep on top but hidden from sharing
 
-  // Show window when ready to prevent visual flash
-  mainWindow.once("ready-to-show", () => {
-    mainWindow.show();
-
-    // Focus the window and ensure it can receive keyboard events
-    if (mainWindow) {
-      mainWindow.focus();
-      mainWindow.setAlwaysOnTop(true);
-      // Ensure content protection is always enabled
-      mainWindow.setContentProtection(true);
-    }
-  });
+  // Open DevTools for debugging (only in development)
+  if (process.env.NODE_ENV === "development") {
+    mainWindow.webContents.once("did-finish-load", () => {
+      mainWindow.webContents.openDevTools();
+    });
+  }
 
   // Handle window close (hide instead of quit)
   mainWindow.on("close", (event) => {
@@ -143,9 +95,6 @@ function createWindow() {
       mainWindow.focus();
     }
   });
-
-  // Create system tray
-  createTray();
 
   // Initialize API
   skillEdgeAPI = new SkillEdgeAPI();
@@ -241,9 +190,18 @@ function setupIpcHandlers() {
   );
 
   // Handle usage update
-  ipcMain.handle("update-usage", async (event, { minutesUsed }) => {
+  ipcMain.handle("update-usage", async (event, { seconds }) => {
     try {
-      const result = await skillEdgeAPI.updateUsage(minutesUsed);
+      const result = await skillEdgeAPI.updateUsage(seconds);
+      return result;
+    } catch (error) {
+      return { success: false, error: error.message };
+    }
+  });
+
+  ipcMain.handle("get-usage", async (event) => {
+    try {
+      const result = await skillEdgeAPI.getUsage();
       return result;
     } catch (error) {
       return { success: false, error: error.message };
@@ -407,9 +365,12 @@ function setupIpcHandlers() {
           break;
         case "main":
         default:
-          // Start with wider main AI response screen, will grow with conversation
+          // Check if popup is visible by looking at the DOM from renderer
+          // Default: just audio section (around 350-400px)
+          // With popup: add 280px for the popup
           newWidth = 700;
-          newHeight = 400;
+          newHeight = 420; // Audio section only
+
           // Opacity handled by CSS for better text clarity
           break;
       }
@@ -423,59 +384,86 @@ function setupIpcHandlers() {
     }
     return { success: true };
   });
+
+  // Handle window resize based on content
+  ipcMain.handle("get-content-height", (event) => {
+    if (mainWindow) {
+      // This will be called from renderer to get actual content height
+      // Return the calculated height
+      return { success: true };
+    }
+    return { success: false };
+  });
+
+  // Handle dynamic window resizing with specific height
+  ipcMain.handle("resize-with-height", (event, { width, height }) => {
+    if (mainWindow) {
+      const bounds = mainWindow.getBounds();
+      mainWindow.setBounds({
+        x: bounds.x,
+        y: bounds.y,
+        width: width,
+        height: height,
+      });
+      return { success: true };
+    }
+    return { success: false };
+  });
 }
 
 function setupGlobalShortcuts() {
   // Disabled global shortcut - it was blocking spacebar in renderer
-  console.log("Global shortcuts disabled - using renderer-only approach");
 }
 
 function createTray() {
-  try {
-    // Create system tray icon
-    const iconPath = path.join(__dirname, "assets/tray-icon.png");
-    tray = new Tray(iconPath);
+  // Create tray icon
+  tray = new Tray(path.join(__dirname, "assets/tray-icon.png"));
 
-    const contextMenu = Menu.buildFromTemplate([
-      {
-        label: "SkillEdge Desktop",
-        enabled: false,
+  // Create context menu
+  const contextMenu = Menu.buildFromTemplate([
+    {
+      label: "Show SkillEdge",
+      click: () => {
+        if (mainWindow) {
+          mainWindow.show();
+          mainWindow.focus();
+        }
       },
-      { type: "separator" },
-      {
-        label: "Show/Hide",
-        click: () => {
-          if (mainWindow.isVisible()) {
-            mainWindow.hide();
-          } else {
-            mainWindow.show();
-          }
-        },
+    },
+    {
+      label: "Hide SkillEdge",
+      click: () => {
+        if (mainWindow) {
+          mainWindow.hide();
+        }
       },
-      {
-        label: "Login Status",
-        submenu: [
-          {
-            label: isLoggedIn ? "Logged In" : "Not Logged In",
-            enabled: false,
-          },
-        ],
+    },
+    { type: "separator" },
+    {
+      label: "Quit",
+      click: () => {
+        app.quit();
       },
-      { type: "separator" },
-      {
-        label: "Quit",
-        click: () => {
-          app.quit();
-        },
-      },
-    ]);
+    },
+  ]);
 
-    tray.setContextMenu(contextMenu);
-    tray.setToolTip("SkillEdge Desktop - AI Interview Assistant");
-  } catch (error) {
-    console.warn("Failed to create system tray:", error.message);
-    // Continue without tray if icon is missing
-  }
+  // Set tooltip
+  tray.setToolTip("SkillEdge Desktop");
+
+  // Set context menu
+  tray.setContextMenu(contextMenu);
+
+  // Handle tray click (show/hide window)
+  tray.on("click", () => {
+    if (mainWindow) {
+      if (mainWindow.isVisible()) {
+        mainWindow.hide();
+      } else {
+        mainWindow.show();
+        mainWindow.focus();
+      }
+    }
+  });
 }
 
 // This method will be called when Electron has finished initialization

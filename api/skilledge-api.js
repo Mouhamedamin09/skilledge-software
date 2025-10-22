@@ -356,19 +356,22 @@ ${
 
   /**
    * Update User Usage
-   * @param {number} minutesUsed - Minutes used
+   * @param {number} seconds - Seconds used
    * @returns {Promise<Object>} Usage update response
    */
-  async updateUsage(minutesUsed) {
+  async updateUsage(seconds) {
     try {
       if (!this.token) {
         return { success: false, error: "No authentication token" };
       }
 
+      // Ensure seconds is a valid number
+      const validSeconds = Math.max(1, Math.ceil(Number(seconds) || 1));
+
       const response = await axios.post(
-        `${this.baseURL}/auth/update-usage`,
+        `${this.baseURL}/usage/consume`,
         {
-          minutesUsed,
+          seconds: validSeconds,
         },
         {
           headers: {
@@ -399,6 +402,39 @@ ${
           error.response?.data?.message ||
           error.message ||
           "Usage update failed",
+      };
+    }
+  }
+
+  /**
+   * Get current usage and remaining minutes
+   * @returns {Promise<Object>} Usage data with minutesLeft
+   */
+  async getUsage() {
+    try {
+      if (!this.token) {
+        return { success: false, error: "No authentication token" };
+      }
+
+      const response = await axios.get(`${this.baseURL}/usage/me`, {
+        headers: {
+          Authorization: `Bearer ${this.token}`,
+        },
+      });
+
+      return {
+        success: true,
+        minutesLeft: response.data.minutesLeft,
+        isUnlimited: response.data.isUnlimited,
+        plan: response.data.plan,
+        usage: response.data.usage,
+      };
+    } catch (error) {
+      console.error("Get usage error:", error.response?.data || error.message);
+      return {
+        success: false,
+        error:
+          error.response?.data?.error || error.message || "Get usage failed",
       };
     }
   }

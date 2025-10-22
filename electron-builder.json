@@ -1,0 +1,49 @@
+{
+  "appId": "com.skilledge.desktop",
+  "productName": "SkillEdge Desktop",
+  "forceCodeSigning": false,
+  "icon": "assets/icon.png",
+  "win": {
+    "icon": "assets/icon.png",
+    "target": [
+      {
+        "target": "nsis",
+        "arch": ["x64"]
+      },
+      {
+        "target": "portable",
+        "arch": ["x64"]
+      }
+    ]
+  },
+  "mac": {
+    "icon": "assets/icon.png",
+    "target": "dmg",
+    "category": "public.app-category.productivity"
+  },
+  "linux": {
+    "icon": "assets/icon.png",
+    "target": "AppImage",
+    "category": "Office"
+  },
+  "nsis": {
+    "oneClick": false,
+    "allowToChangeInstallationDirectory": true,
+    "createDesktopShortcut": true,
+    "createStartMenuShortcut": true,
+    "shortcutName": "SkillEdge Desktop"
+  },
+  "directories": {
+    "output": "dist"
+  },
+  "files": ["**/*", "!dist", "!.git", "!*.md", "!test-endpoint.js"],
+  "asar": true,
+  "asarUnpack": [
+    "node_modules/axios/**/*",
+    "node_modules/ws/**/*",
+    "node_modules/electron-store/**/*"
+  ],
+  "portable": {
+    "artifactName": "SkillEdge-Desktop-Portable.exe"
+  }
+}

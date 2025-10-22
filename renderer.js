@@ -8,6 +8,7 @@ class SkillEdgeApp {
     this.isLoggedIn = false;
     this.conversationHistory = [];
     this.currentUser = null;
+    this.audioInitialized = false; // Track if audio is initialized
 
     // User preferences
     this.userPreferences = {
@@ -21,9 +22,31 @@ class SkillEdgeApp {
 
     this.initializeElements();
     this.setupEventListeners();
-    this.initializeAudio();
-    this.checkLoginStatus();
-    this.loadSavedSession();
+
+    // Startup loading screen is already active from HTML
+    // Start initialization after a brief moment to ensure UI is rendered
+    requestAnimationFrame(() => {
+      setTimeout(() => {
+        this.initializeApp();
+      }, 100);
+    });
+  }
+
+  async initializeApp() {
+    try {
+      // Always show login screen first - let user decide
+      // Session will be checked when they try to login
+      this.hideStartupLoading();
+    } catch (error) {
+      console.error("App initialization error:", error);
+      this.hideStartupLoading();
+    }
+  }
+
+  hideStartupLoading() {
+    this.startupLoadingScreen.classList.remove("active");
+    // Always show login screen on startup
+    this.showLoginScreen();
   }
 
   // Session persistence methods
@@ -112,6 +135,7 @@ class SkillEdgeApp {
 
   initializeElements() {
     // Screens
+    this.startupLoadingScreen = document.getElementById("startupLoadingScreen");
     this.loginScreen = document.getElementById("loginScreen");
     this.registerScreen = document.getElementById("registerScreen");
     this.verificationScreen = document.getElementById("verificationScreen");
@@ -158,8 +182,20 @@ class SkillEdgeApp {
 
     // Main interface elements
     this.recordingDot = document.getElementById("recordingDot");
+    this.minutesDisplay = document.getElementById("minutesDisplay");
     this.responseContent = document.getElementById("responseContent");
     this.clearBtn = document.getElementById("clearBtn");
+
+    // New interview layout elements
+    this.audioContent = document.getElementById("audioContent");
+    this.aiAnswerPopup = document.getElementById("aiAnswerPopup");
+    this.closePopup = document.getElementById("closePopup");
+    this.answerText = document.getElementById("answerText");
+    this.tabBtns = document.querySelectorAll(".tab-btn");
+    this.tabContents = document.querySelectorAll(".tab-content");
+    this.recordedAudioSection = document.querySelector(
+      ".recorded-audio-section"
+    );
 
     // New settings elements
     this.settingsContainer = document.getElementById("settingsContainer");
@@ -243,6 +279,19 @@ class SkillEdgeApp {
       this.clearResponses();
     });
 
+    // Tab switching for AI answer popup
+    this.tabBtns.forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const tabName = btn.getAttribute("data-tab");
+        this.switchTab(tabName);
+      });
+    });
+
+    // Close popup button
+    this.closePopup.addEventListener("click", () => {
+      this.closeAIAnswerPopup();
+    });
+
     // New settings dropdown functionality
     this.settingsBtn.addEventListener("click", (e) => {
       e.stopPropagation();
@@ -283,15 +332,27 @@ class SkillEdgeApp {
       this.showLoginScreen();
     });
 
-    // Space key event listener for recording
-    document.addEventListener("keydown", (e) => {
+    // Space key event listener for recording - multiple listeners for reliability
+    const handleSpaceKey = (e) => {
       // Only handle space key when not in input fields
       if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") {
         return;
       }
 
-      // Check for spacebar
-      if (e.code === "Space" || e.key === " " || e.keyCode === 32) {
+      // Only on main screen
+      if (!this.mainScreen.classList.contains("active")) {
+        return;
+      }
+
+      // Check for spacebar - multiple checks for compatibility
+      const isSpace =
+        e.code === "Space" ||
+        e.key === " " ||
+        e.key === "Spacebar" ||
+        e.keyCode === 32 ||
+        e.which === 32;
+
+      if (isSpace) {
         e.preventDefault();
         e.stopPropagation();
 
@@ -303,7 +364,12 @@ class SkillEdgeApp {
         );
         this.handleSpacebarPress();
       }
-    });
+    };
+
+    // Add listener to both document and window for maximum compatibility
+    document.addEventListener("keydown", handleSpaceKey);
+    window.addEventListener("keydown", handleSpaceKey);
+    document.body.addEventListener("keydown", handleSpaceKey);
 
     // Window focus events
     window.addEventListener("focus", () => {
@@ -322,36 +388,48 @@ class SkillEdgeApp {
   }
 
   async initializeAudio() {
+    if (this.audioInitialized) {
+      return true; // Already initialized
+    }
+
     try {
       const success = await this.audioRecorder.initialize();
       if (success) {
         console.log("Audio recorder initialized successfully");
+        this.audioInitialized = true;
 
         // Setup audio recorder callbacks
         this.audioRecorder.onStop = (audioBlob) => {
           this.handleAudioRecorded(audioBlob);
         };
+        return true;
       } else {
         console.error("Failed to initialize audio recorder");
         this.showError(
           "Failed to initialize audio recording. Please check microphone permissions."
         );
+        return false;
       }
     } catch (error) {
       console.error("Audio initialization error:", error);
       this.showError(
         "Audio initialization failed. Please check microphone permissions."
       );
+      return false;
     }
   }
 
-  async checkLoginStatus() {
+  async checkLoginStatusAsync() {
     try {
-      // First test API connection
-      console.log("Testing API connection...");
-      const connectionTest = await ipcRenderer.invoke("test-api-connection");
-      console.log("API connection test result:", connectionTest);
+      // First try to load saved session (fast, no network)
+      const sessionLoaded = this.loadSavedSession();
+      if (sessionLoaded) {
+        console.log("Session loaded from cache, skipping API check");
+        return;
+      }
 
+      // Only if no saved session, check with API (slow)
+      console.log("No saved session, checking with API...");
       const result = await ipcRenderer.invoke("get-profile");
       console.log("Profile check result:", result);
 
@@ -365,14 +443,14 @@ class SkillEdgeApp {
           this.showMainScreen();
           this.updateUserInfo();
         } else {
-          this.showLoginScreen();
+          // Already showing login screen from constructor
         }
       } else {
-        this.showLoginScreen();
+        // Already showing login screen from constructor
       }
     } catch (error) {
       console.error("Login status check failed:", error);
-      this.showLoginScreen();
+      // Already showing login screen from constructor
     }
   }
 
@@ -569,6 +647,9 @@ class SkillEdgeApp {
       this.settingsContainer.style.display = "none";
       this.hideSettingsDropdown();
 
+      // Stop usage update timer
+      this.stopUsageUpdateTimer();
+
       // Clear saved session
       this.clearSession();
 
@@ -580,6 +661,7 @@ class SkillEdgeApp {
   }
 
   showLoginScreen() {
+    this.startupLoadingScreen.classList.remove("active");
     this.loginScreen.classList.add("active");
     this.registerScreen.classList.remove("active");
     this.verificationScreen.classList.remove("active");
@@ -591,10 +673,8 @@ class SkillEdgeApp {
     this.passwordInput.value = "";
     this.hideError();
 
-    // Resize window for login screen (with small delay to prevent glitch)
-    setTimeout(() => {
-      ipcRenderer.invoke("resize-for-screen", { screen: "login" });
-    }, 50);
+    // Resize window for login screen (no delay on initial startup)
+    ipcRenderer.invoke("resize-for-screen", { screen: "login" });
   }
 
   showRegisterScreen() {
@@ -636,6 +716,7 @@ class SkillEdgeApp {
   }
 
   showPreferencesScreen() {
+    this.startupLoadingScreen.classList.remove("active");
     this.loginScreen.classList.remove("active");
     this.registerScreen.classList.remove("active");
     this.verificationScreen.classList.remove("active");
@@ -681,6 +762,7 @@ class SkillEdgeApp {
   }
 
   showMainScreen() {
+    this.startupLoadingScreen.classList.remove("active");
     this.loginScreen.classList.remove("active");
     this.registerScreen.classList.remove("active");
     this.verificationScreen.classList.remove("active");
@@ -693,14 +775,115 @@ class SkillEdgeApp {
     this.settingsContainer.style.display = "block";
     this.updateSettingsInfo();
 
-    // Resize window for main screen (with small delay to prevent glitch)
+    // Start usage display updates
+    this.startUsageUpdateTimer();
+
+    // Clear audio content and hide popup on startup
+    this.audioContent.innerHTML = `
+      <div class="audio-placeholder">
+        <p>Press SPACE to start recording</p>
+      </div>
+    `;
+    this.aiAnswerPopup.classList.remove("active");
+
+    // Ensure window is focused and ready to receive keyboard events
     setTimeout(() => {
-      ipcRenderer.invoke("resize-for-screen", { screen: "main" });
+      window.focus();
+      document.body.focus();
+      document.body.click(); // Trigger focus
     }, 50);
+
+    // Resize window to fit ONLY the audio section (no extra space)
+    setTimeout(() => {
+      const audioHeight = this.recordedAudioSection.offsetHeight || 180;
+      const totalHeight = audioHeight + 60; // +60 for title bar and padding
+
+      ipcRenderer.invoke("resize-with-height", {
+        width: 700,
+        height: Math.max(totalHeight, 200), // Min 200px
+      });
+    }, 100);
   }
 
   updateUserInfo() {
     // User info display removed - no status bar
+  }
+
+  async updateUsageDisplay() {
+    try {
+      const result = await ipcRenderer.invoke("get-usage");
+
+      if (result.success) {
+        if (result.isUnlimited) {
+          this.minutesDisplay.textContent = "∞ min";
+          this.minutesDisplay.classList.add("unlimited");
+          this.minutesDisplay.style.color = "";
+        } else {
+          const minutes = result.minutesLeft || 0;
+          this.minutesDisplay.textContent = `${minutes} min`;
+          this.minutesDisplay.classList.remove("unlimited");
+
+          // Show warning colors
+          if (minutes <= 5 && minutes > 0) {
+            this.minutesDisplay.style.color = "#f59e0b"; // Orange warning
+          } else if (minutes === 0) {
+            this.minutesDisplay.style.color = "#ef4444"; // Red when depleted
+          } else {
+            this.minutesDisplay.style.color = "";
+          }
+        }
+      } else {
+        console.error("Failed to get usage:", result.error);
+        this.minutesDisplay.textContent = "-- min";
+      }
+    } catch (error) {
+      console.error("Error updating usage display:", error);
+      this.minutesDisplay.textContent = "-- min";
+    }
+  }
+
+  async consumeOneMinuteAndUpdate() {
+    try {
+      // Consume 60 seconds from database
+      const result = await ipcRenderer.invoke("update-usage", { seconds: 60 });
+
+      if (result.success) {
+        // Update current user data from response
+        if (result.user) {
+          this.currentUser = result.user;
+          this.updateSettingsInfo();
+        }
+      }
+
+      // Fetch updated value from database and display
+      await this.updateUsageDisplay();
+    } catch (error) {
+      console.error("Error consuming minute:", error);
+    }
+  }
+
+  startUsageUpdateTimer() {
+    // Clear any existing timer
+    if (this.usageUpdateTimer) {
+      clearInterval(this.usageUpdateTimer);
+    }
+
+    // Get initial value from database and display immediately
+    this.updateUsageDisplay();
+
+    // Every 1 minute: consume 60 seconds from DB, then fetch and display updated value
+    this.usageUpdateTimer = setInterval(() => {
+      this.consumeOneMinuteAndUpdate();
+    }, 60000); // Every 1 minute (60000ms)
+  }
+
+  stopUsageUpdateTimer() {
+    if (this.usageUpdateTimer) {
+      clearInterval(this.usageUpdateTimer);
+      this.usageUpdateTimer = null;
+    }
+    // Reset color
+    this.minutesDisplay.style.color = "";
   }
 
   updateSettingsInfo() {
@@ -720,78 +903,13 @@ class SkillEdgeApp {
   }
 
   showInstantLoading() {
-    const responseContainer = this.responseContent;
-
-    // Remove placeholder if exists
-    const placeholder = responseContainer.querySelector(".placeholder");
-    if (placeholder) {
-      placeholder.remove();
-    }
-
-    // Create instant loading conversation wrapper
-    const conversationWrapper = document.createElement("div");
-    conversationWrapper.className = "conversation-exchange";
-
-    // Create loading message for interviewer (placeholder)
-    const interviewerMessage = document.createElement("div");
-    interviewerMessage.className = "response-item interviewer";
-    interviewerMessage.innerHTML = `
-      <div class="response-avatar">
-        <i class="fas fa-user-tie"></i>
-      </div>
-      <div class="response-content-wrapper">
-        <div class="response-meta">
-          <span class="response-sender">Interviewer</span>
-          <span class="response-time">${new Date().toLocaleTimeString()}</span>
-        </div>
-        <div class="response-loading">
-          <div class="loading-spinner">
-            <i class="fas fa-spinner fa-spin"></i>
-            <p>Processing audio...</p>
-          </div>
-        </div>
+    // Show loading indicator in audio content
+    this.audioContent.innerHTML = `
+      <div style="text-align: center; padding: 12px; color: #94a3b8; font-size: 12px;">
+        <i class="fas fa-spinner fa-spin"></i>
+        <p>Processing audio...</p>
       </div>
     `;
-
-    // Create AI response placeholder with loading
-    const aiMessage = document.createElement("div");
-    aiMessage.className = "response-item ai";
-    aiMessage.innerHTML = `
-      <div class="response-avatar">
-        <i class="fas fa-robot"></i>
-      </div>
-      <div class="response-content-wrapper">
-        <div class="response-meta">
-          <span class="response-sender">AI Assistant</span>
-          <span class="response-time">${new Date().toLocaleTimeString()}</span>
-        </div>
-        <div class="response-loading">
-          <div class="loading-spinner">
-            <i class="fas fa-spinner fa-spin"></i>
-            <p>Generating response...</p>
-          </div>
-        </div>
-      </div>
-    `;
-
-    // Add messages to wrapper
-    conversationWrapper.appendChild(interviewerMessage);
-    conversationWrapper.appendChild(aiMessage);
-
-    // Insert at the top (latest first)
-    responseContainer.insertBefore(
-      conversationWrapper,
-      responseContainer.firstChild
-    );
-
-    // Scroll to top to show latest message
-    responseContainer.scrollTop = 0;
-
-    // Store references for later update
-    this.currentInterviewerElement =
-      interviewerMessage.querySelector(".response-loading");
-    this.currentAIResponseElement =
-      aiMessage.querySelector(".response-loading");
   }
 
   handleSpacebarPress() {
@@ -827,6 +945,33 @@ class SkillEdgeApp {
       this.isRecording
     );
     if (!this.isLoggedIn || this.isRecording) return;
+
+    // Check if user has minutes left (except unlimited)
+    const minutesLeft = Number(
+      this.currentUser?.subscription?.minutesLeft ?? 0
+    );
+    const isUnlimited =
+      minutesLeft === -1 || this.currentUser?.subscription?.plan === "pro+";
+
+    if (!isUnlimited && minutesLeft <= 0) {
+      this.audioContent.innerHTML = `
+        <div class="audio-placeholder" style="color: #ef4444;">
+          <p><i class="fas fa-exclamation-triangle"></i> No minutes left</p>
+          <p style="font-size: 11px; opacity: 0.8;">Please top up or upgrade your plan</p>
+        </div>
+      `;
+      return;
+    }
+
+    // Lazy initialize audio on first use
+    if (!this.audioInitialized) {
+      console.log("Audio not initialized yet, initializing now...");
+      const initialized = await this.initializeAudio();
+      if (!initialized) {
+        console.error("Failed to initialize audio");
+        return;
+      }
+    }
 
     try {
       const success = this.audioRecorder.startRecording();
@@ -871,9 +1016,12 @@ class SkillEdgeApp {
     if (!this.isLoggedIn) return;
 
     try {
-      // Convert audio to base64 for API transmission
-      const audioBase64 = await this.audioRecorder.audioBlobToBase64(audioBlob);
+      // Estimate seconds from audio blob size (similar to web client)
+      let approxSeconds = Math.max(1, Math.round(audioBlob.size / 4096));
       const duration = await this.audioRecorder.getAudioDuration(audioBlob);
+
+      // Use actual duration if available, otherwise use estimate
+      const actualSeconds = duration || approxSeconds;
 
       // Get real transcription
       const transcript = await this.transcribeAudio(audioBlob);
@@ -885,9 +1033,8 @@ class SkillEdgeApp {
         // Generate AI response with animation
         await this.generateAIResponseWithAnimation(transcript);
 
-        // Update usage
-        const minutesUsed = duration / 60;
-        await this.updateUsage(minutesUsed);
+        // Update usage with seconds (not minutes)
+        await this.updateUsage(actualSeconds);
       } else {
         // No valid transcript received - just don't do anything
         console.log("No valid transcript received, skipping processing");
@@ -1028,33 +1175,34 @@ class SkillEdgeApp {
   }
 
   animateAIResponse(response) {
-    if (!this.currentAIResponseElement) return;
+    // Show the AI answer popup with the response
+    // Extract a summary as the "question" from conversation history
+    let summary = "Your Question";
+    if (this.conversationHistory.length >= 2) {
+      const lastUserMessage =
+        this.conversationHistory[this.conversationHistory.length - 2].content;
+      summary = lastUserMessage.substring(0, 100); // First 100 chars as summary
+      if (lastUserMessage.length > 100) summary += "...";
+    }
 
-    // Remove loading indicator and add response text
-    this.currentAIResponseElement.innerHTML = "";
-    this.currentAIResponseElement.classList.remove("response-loading");
-    this.currentAIResponseElement.classList.add("response-text");
-
-    // Typewriter effect
-    let index = 0;
-    const speed = 20; // milliseconds per character
-
-    const typeWriter = () => {
-      if (index < response.length) {
-        this.currentAIResponseElement.textContent += response.charAt(index);
-        index++;
-        setTimeout(typeWriter, speed);
-      }
-    };
-
-    typeWriter();
+    this.showAIAnswerPopup(summary, response);
   }
 
-  async updateUsage(minutesUsed) {
+  async updateUsage(secondsUsed) {
     try {
-      const result = await ipcRenderer.invoke("update-usage", { minutesUsed });
+      const result = await ipcRenderer.invoke("update-usage", {
+        seconds: secondsUsed,
+      });
       if (result.success) {
-        this.updateUserInfo();
+        // Update current user data from response
+        if (result.user) {
+          this.currentUser = result.user;
+          this.updateSettingsInfo();
+        }
+        // Update the minutes display immediately after usage is consumed
+        this.updateUsageDisplay();
+      } else {
+        console.error("Usage update failed:", result.error);
       }
     } catch (error) {
       console.error("Usage update error:", error);
@@ -1062,83 +1210,24 @@ class SkillEdgeApp {
   }
 
   displayQuestionInstantly(userTranscript) {
-    // Update the interviewer element with the actual transcript
-    if (this.currentInterviewerElement) {
-      this.currentInterviewerElement.innerHTML = userTranscript;
-      this.currentInterviewerElement.classList.remove("response-loading");
-      this.currentInterviewerElement.classList.add("response-text");
-    }
+    // Display the user's transcript in the audio content section
+    this.displayUserTranscript(userTranscript);
   }
 
   displayResponse(userTranscript, aiResponse) {
-    const responseContainer = this.responseContent;
-
-    // Remove placeholder if exists
-    const placeholder = responseContainer.querySelector(".placeholder");
-    if (placeholder) {
-      placeholder.remove();
-    }
-
-    // Create conversation wrapper for this exchange
-    const conversationWrapper = document.createElement("div");
-    conversationWrapper.className = "conversation-exchange";
-
-    // Create interviewer message
-    const interviewerMessage = document.createElement("div");
-    interviewerMessage.className = "response-item interviewer";
-    interviewerMessage.innerHTML = `
-      <div class="response-avatar">
-        <i class="fas fa-user-tie"></i>
-      </div>
-      <div class="response-content-wrapper">
-        <div class="response-meta">
-          <span class="response-sender">Interviewer</span>
-          <span class="response-time">${new Date().toLocaleTimeString()}</span>
-        </div>
-        <div class="response-text">${userTranscript}</div>
-      </div>
-    `;
-
-    // Create AI response
-    const aiMessage = document.createElement("div");
-    aiMessage.className = "response-item ai";
-    aiMessage.innerHTML = `
-      <div class="response-avatar">
-        <i class="fas fa-robot"></i>
-      </div>
-      <div class="response-content-wrapper">
-        <div class="response-meta">
-          <span class="response-sender">AI Assistant</span>
-          <span class="response-time">${new Date().toLocaleTimeString()}</span>
-        </div>
-        <div class="response-text">${aiResponse}</div>
-      </div>
-    `;
-
-    // Add messages to wrapper (interviewer first, then AI for horizontal layout)
-    conversationWrapper.appendChild(interviewerMessage);
-    conversationWrapper.appendChild(aiMessage);
-
-    // Insert at the top (latest first)
-    responseContainer.insertBefore(
-      conversationWrapper,
-      responseContainer.firstChild
-    );
-
-    // Scroll to top to show latest message
-    responseContainer.scrollTop = 0;
+    // Display user transcript
+    this.displayUserTranscript(userTranscript);
   }
 
   clearResponses() {
-    this.responseContent.innerHTML = `
-      <div class="placeholder">
-        <i class="fas fa-comments"></i>
-        <p>Press SPACE to start recording, SPACE again to stop</p>
-        <p style="font-size: 12px; color: #94a3b8; margin-top: 8px">
-          <i class="fas fa-keyboard"></i> Your AI interview responses will appear here
-        </p>
+    // Clear audio content
+    this.audioContent.innerHTML = `
+      <div class="audio-placeholder">
+        <p>Press SPACE to start recording</p>
       </div>
     `;
+    // Hide popup
+    this.aiAnswerPopup.classList.remove("active");
     this.conversationHistory = [];
   }
 
@@ -1148,6 +1237,98 @@ class SkillEdgeApp {
     } else {
       this.recordingDot.classList.remove("recording");
     }
+  }
+
+  switchTab(tabName) {
+    // Update button active state
+    this.tabBtns.forEach((btn) => {
+      btn.classList.remove("active");
+      if (btn.getAttribute("data-tab") === tabName) {
+        btn.classList.add("active");
+      }
+    });
+
+    // Update content visibility
+    this.tabContents.forEach((content) => {
+      content.classList.remove("active");
+    });
+    document.getElementById(tabName + "Tab").classList.add("active");
+  }
+
+  showAIAnswerPopup(question, answer) {
+    // Only show popup if we have valid answer data
+    if (!answer || answer.trim() === "") {
+      console.warn("Popup not shown - missing answer data");
+      return;
+    }
+
+    // Clear previous content
+    this.answerText.textContent = "";
+
+    // Show popup immediately
+    this.aiAnswerPopup.classList.add("active");
+
+    // Start fast typing animation (5ms per character for speed)
+    let index = 0;
+    const speed = 5; // Very fast - 5ms per character
+
+    const resizeWindow = () => {
+      // Calculate actual content height
+      const audioHeight = this.recordedAudioSection.offsetHeight || 180;
+      const popupHeight = this.aiAnswerPopup.offsetHeight || 100;
+      const totalHeight = audioHeight + popupHeight + 60; // +60 for title bar and padding
+
+      ipcRenderer.invoke("resize-with-height", {
+        width: 700,
+        height: Math.min(totalHeight, 900), // Max 900px for very long answers
+      });
+    };
+
+    const typeWriter = () => {
+      if (index < answer.length) {
+        this.answerText.textContent += answer.charAt(index);
+        index++;
+
+        // Resize window every 50 characters to grow smoothly
+        if (index % 50 === 0) {
+          resizeWindow();
+        }
+
+        setTimeout(typeWriter, speed);
+      } else {
+        // Final resize when complete
+        setTimeout(resizeWindow, 50);
+      }
+    };
+
+    // Initial resize then start typing
+    setTimeout(() => {
+      resizeWindow();
+      typeWriter();
+    }, 50);
+  }
+
+  closeAIAnswerPopup() {
+    this.aiAnswerPopup.classList.remove("active");
+
+    // Resize window back to normal (just audio section)
+    setTimeout(() => {
+      const audioHeight = this.recordedAudioSection.offsetHeight || 350;
+      const totalHeight = audioHeight + 60; // +60 for title bar and padding
+
+      ipcRenderer.invoke("resize-with-height", {
+        width: 700,
+        height: Math.min(totalHeight, 800),
+      });
+    }, 100);
+  }
+
+  displayUserTranscript(transcript) {
+    // Add user transcript to audio content
+    const p = document.createElement("p");
+    p.textContent = `Speaker 1: ${transcript}`;
+    this.audioContent.innerHTML = "";
+    this.audioContent.appendChild(p);
   }
 
   showSettings() {
@@ -1217,16 +1398,16 @@ class SkillEdgeApp {
       meetingPurpose,
       generalInfo,
       selectedLanguage,
-      interviewType: this.userPreferences.interviewType,
+      interviewType: "general", // Default to general interview type
     };
     this.preferencesSaved = true;
 
     // Save session with updated preferences
     this.saveSession();
 
-    // Hide error and move to interview type selection
+    // Hide error and move to main screen
     this.hideError();
-    this.showInterviewTypeScreen();
+    this.showMainScreen();
   }
 
   handleInterviewTypeSelection(type) {
